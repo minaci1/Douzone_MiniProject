@@ -3,7 +3,9 @@ package DTO;
 import lombok.Data;
 
 @Data
-public class Erank {
-	private int rankno;
+public class Restday_Holiday {
 	private String ename;
+	private int restday;
 }
+
+
