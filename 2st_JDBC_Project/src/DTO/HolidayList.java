@@ -12,6 +12,7 @@ public class HolidayList {
 	private Date Start_date;
 	private Date End_date;
 	private String hname;
+	private int stateno;
 	private String sinfo;
 	private int restday;
 	

@@ -1,5 +1,4 @@
 package DAO;
-
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -8,14 +7,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import DTO.Eapply;
-import DTO.Emp;
 import DTO.HolidayList;
-import DTO.Restday_Holiday;
-import utils.SingletonHelper;
+import utils.ConnHelper;
  
 public class Holiday_Dao {
 	
-	//1. 휴가신청 내역 조회
+	//1. 휴가신청 내역 조회(전체)
 	public List<HolidayList> getList(){
 		List<HolidayList> holiydaylist = new ArrayList<>();
 		 
@@ -25,13 +22,14 @@ public class Holiday_Dao {
 		ResultSet rs =null;
 		
 		try {
-			conn = SingletonHelper.getConnection("oracle");
+			conn = ConnHelper.getConnection();
 			String sql= "select b.applyno"
 					+ ",a.empno"
 					+ ",a.ename"
 					+ ",b.start_date"
 					+ ",b.end_date"
 					+ ",c.hname"
+					+ ",b.stateno"
 					+ ",d.sinfo"
 					+ ",e.restday"
 					+ " from emp a join eapply b "
@@ -55,6 +53,7 @@ public class Holiday_Dao {
 				hl.setStart_date(rs.getDate("start_date"));
 				hl.setEnd_date(rs.getDate("end_date"));
 				hl.setHname(rs.getString("hname"));
+				hl.setStateno(rs.getInt("stateno"));
 				hl.setSinfo(rs.getString("sinfo"));
 				hl.setRestday(rs.getInt("restday"));
 			 
@@ -65,74 +64,46 @@ public class Holiday_Dao {
 			e.printStackTrace();
 			System.out.println(e.getMessage());
 		}finally {
-			SingletonHelper.close(rs);
-			SingletonHelper.close(pstmt);
+			ConnHelper.close(rs);
+			ConnHelper.close(pstmt);
 		}
 		return holiydaylist;
 		
 	}
-	
-	
-	
-	//2. 조건조회 (경기도 주소인 사람 조회)
-	public List<Emp> getSelectLike(String addr) {
+ 
+	// 휴가 잔여 일수 얻기
+	public int getRestDay(int empno) {
 		Connection conn = null;
 		PreparedStatement pstmt = null;
 		ResultSet rs = null;
-		List<Emp> empList = new ArrayList<Emp>();
+		int dateCal = 0;
+		
 		try {
-			conn = SingletonHelper.getConnection("oracle");
-			String sql = "select empno"
-					+ ", rankno"
-					+ ",deptno"
-					+ ",mgr"
-					+ ",ename"
-					+ ",id_number"
-					+ ",age"
-					+ ",tel"
-					+ ",hiredate"
-					+ ",email "
-					+ "from emp "
-					+ "where addr like ?";
+			conn = ConnHelper.getConnection();
+			String sql = "select restday from rest_holiday where empno = ?";
 			pstmt = conn.prepareStatement(sql);
-			String search = "%"+addr+"%";
-			pstmt.setString(1, search);
+			pstmt.setInt(1, empno);
 			rs = pstmt.executeQuery();
 			if(rs.next()) {
-				do {
-					Emp edto = new Emp();
-					edto.setEmpno(rs.getInt(1));
-					edto.setRankno(rs.getInt(2));
-					edto.setDeptno(rs.getInt(3));
-					edto.setMgr(rs.getInt(4));
-					edto.setEname(rs.getString(5));
-					edto.setId_number(rs.getString(6));
-					edto.setAge(rs.getInt(7));
-					edto.setTel(rs.getString(8));
-					edto.setHiredate(rs.getDate(9));
-					edto.setEmail(rs.getString(10));
-					
-					
-					empList.add(edto);
-				}while(rs.next());
+				dateCal = rs.getInt(1);
 			}
 		}catch(Exception e) {
 			System.out.println(e.getMessage());
 		}finally {
-			SingletonHelper.close(rs);
-			SingletonHelper.close(pstmt);
-		}		
-		return empList;
+			ConnHelper.close(rs);
+			ConnHelper.close(pstmt);
+		}
+		return dateCal;
 	}
 	
-	//3. 데이터 삽입(휴가신청) 신청번호 시퀀스
+	// 2.데이터 추가(휴가신청) 신청번호 시퀀스
 		public int holiydayInsert(Eapply eapply) {
 			Connection conn = null;
 			PreparedStatement pstmt = null;
 			int row = 0;
 			
 			try {
-				conn = SingletonHelper.getConnection("oracle");
+				conn = ConnHelper.getConnection();
 				String sql = "insert into "
 						+ "eapply(applyno, empno, holidayno, stateno, start_date,end_date,reason) "
 						+ "values(eapply_num.nextval, ?, ?, 0, ?, ?, ?)";
@@ -150,46 +121,13 @@ public class Holiday_Dao {
 			}catch(Exception e) {
 				System.out.println(e.getMessage());
 			}finally {
-				SingletonHelper.close(pstmt);
+				ConnHelper.close(pstmt);
 			}		
 			return row;
 		}
-		
-	//4. 본인 잔여휴가 일수 조회
-	public Restday_Holiday getday(int empno) {
-		
-		Restday_Holiday rh = new Restday_Holiday();
-		Connection conn =null;
-		PreparedStatement pstmt =null;
-		ResultSet rs =null;
-		
-		try {
-			conn = SingletonHelper.getConnection("oracle");
-			String sql = "select a.ename"
-					+ ",b.restday "
-					+ "from emp a join rest_holiday b "
-					+ "on(a.empno = b.empno) "
-					+ "where a.empno = ?";
-			
-			pstmt = conn.prepareStatement(sql);
-			pstmt.setInt(1, empno);
-			rs = pstmt.executeQuery();
-			
-			if(rs.next()) {
-				rh.setEname(rs.getString(1));
-				rh.setRestday(rs.getInt(2));
-			}
-		} catch (Exception e) {
-			System.out.println(e.getMessage());
-		}finally {
-			SingletonHelper.close(rs);
-			SingletonHelper.close(pstmt);
-		}
-		return rh;
-	}
  
-	//5. 휴가 상태 변경 (대기 -> 승인)
-	public int changeStateno(int applyno) {
+	// 3. 휴가 상태 변경 (대기 -> 승인 / 대기->반려)
+	public void changeStateno(int applyno, int stateno) {
 		
 		Eapply ep = new Eapply();
 		Connection conn =null;
@@ -197,23 +135,26 @@ public class Holiday_Dao {
 		int rowcnt =0;
 		
 		try {
-			conn = SingletonHelper.getConnection("oracle");
+			conn = ConnHelper.getConnection();
 			String sql ="update eapply "
-					+ "set stateno = 1 "
+					+ "set stateno = ? "
 					+ "where applyno =?";// 0 : 대기 1 승인 2 반려 중 0 대기를 승인으로 바꾸기  
 			
 			pstmt = conn.prepareStatement(sql);
-			pstmt.setInt(1, applyno);
+			pstmt.setInt(1, stateno);
+			pstmt.setInt(2, applyno);
 			rowcnt = pstmt.executeUpdate();
-	
+			
+			if(rowcnt > 0) {
+				System.out.println("update row count : "+ rowcnt);
+			}
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.out.println(e.getMessage());
 		}
-		return rowcnt;
 	}
 	
-	//6. 승인된 내역 조회하기 ,차감할 신청번호 내역 조회하기 
+	//3-1. 휴가일수 차감할 신청번호 내역 조회 
 	public HolidayList getSignList(int applyno) {
 		
 		HolidayList hl = null;
@@ -223,13 +164,14 @@ public class Holiday_Dao {
 		 
 		
 		try {
-			conn = SingletonHelper.getConnection("oracle");
+			conn = ConnHelper.getConnection();
 			String sql = "select b.applyno"
 					+ ",a.empno"
 					+ ",a.ename"
 					+ ",b.start_date"
 					+ ",b.end_date"
 					+ ",c.hname"
+					+",d.stateno"
 					+ ",d.sinfo"
 					+ ",e.restday"
 					+ " from emp a join eapply b "
@@ -255,6 +197,7 @@ public class Holiday_Dao {
 					hl.setStart_date(rs.getDate("start_date"));
 					hl.setEnd_date(rs.getDate("end_date"));
 					hl.setHname(rs.getString("hname"));
+					hl.setStateno(rs.getInt("stateno"));
 					hl.setSinfo(rs.getString("sinfo"));
 					hl.setRestday(rs.getInt("restday"));
 				  
@@ -263,92 +206,55 @@ public class Holiday_Dao {
 		}catch(Exception e) {
 			System.out.println(e.getMessage());
 		}finally {
-			SingletonHelper.close(rs);
-			SingletonHelper.close(pstmt);
+			ConnHelper.close(rs);
+			ConnHelper.close(pstmt);
 		}		
 		return hl;
 	}
+ 
 	
 	
-	//7. 휴가신청목록리스트 
-	public List<Eapply> vacationList() {
-		Connection conn = null;
-		PreparedStatement pstmt = null;
-		ResultSet rs = null;
-		List<Eapply> eapplyList = new ArrayList<Eapply>();
-		
-		try {
-			conn = SingletonHelper.getConnection("oracle");
-			String sql = "select applyno"
-					+ ",empno"
-					+ ",holidayno"
-					+ ",stateno"
-					+ ",start_date"
-					+ ",end_date"
-					+ ",reason "
-					+ "from eapply";
-			pstmt = conn.prepareStatement(sql);	
-			rs = pstmt.executeQuery();
-			while(rs.next()) {
-				Eapply apdto = new Eapply();
-				apdto.setApplyno(rs.getInt(1));
-				apdto.setEmpno(rs.getInt(2));
-				apdto.setHolidayno(rs.getInt(3));
-				apdto.setStateno(rs.getInt(4));
-				apdto.setStart_date(rs.getDate(5));
-				apdto.setEnd_date(rs.getDate(6));
-				apdto.setReason(rs.getString(7));
-				eapplyList.add(apdto);
-			}
-		}catch(Exception e) {
-			System.out.println(e.getMessage());
-		}finally {
-			SingletonHelper.close(rs);
-			SingletonHelper.close(pstmt);
-		}		
-		return eapplyList; 
-	}
-	
-	
-	
-	// 8. 휴가일수 얻기 -> 사용
-	public int getVacationDay(int applyno, Date start_date, Date end_date) {
+	// 3-2. 휴가일수 얻기 -> 사용
+	public int getVacationDay(int empno,  Date end_date, Date start_date) {
 		Connection conn = null;
 		PreparedStatement pstmt = null;
 		ResultSet rs = null;
 		int dateCal = 0;
 		
 		try {
-			conn = SingletonHelper.getConnection("oracle");
+			conn = ConnHelper.getConnection();
 			String sql = "select ?-? " //종료일 - 시작일 연산
 					+ "from eapply "
-					+ "where applyno = ?";
+					+ "where empno = ?";
 			pstmt = conn.prepareStatement(sql);
 			pstmt.setDate(1, end_date);
 			pstmt.setDate(2, start_date);
-			pstmt.setInt(3, applyno);
+			pstmt.setInt(3, empno);
 			rs = pstmt.executeQuery();
 			if(rs.next()) {
-				dateCal = rs.getInt(1);
+				dateCal = rs.getInt(1); //select 해서 나온 값 전달 
 			}
 		}catch(Exception e) {
 			System.out.println(e.getMessage());
 		}finally {
-			SingletonHelper.close(rs);
-			SingletonHelper.close(pstmt);
+			ConnHelper.close(rs);
+			ConnHelper.close(pstmt);
 		}
 		return dateCal;
 	}
 	
-	//9. 휴가 잔여일수 - 휴가 신청일수 업데이트
+ 
+	
+	
+	//2-1, 3-2. 휴가 잔여일수 - 휴가 신청일수 업데이트
 	public void  restdayupdate(int day,int empno) {
 		Connection conn = null;
 		PreparedStatement pstmt = null;
 	
 		try {
-			conn = SingletonHelper.getConnection("oracle");
+			conn = ConnHelper.getConnection();
 			String sql = "update rest_holiday "
-					+ "set restday =  restday- ?"
+					+ "set restday =  restday+ ?"
 					+ "where empno =?";
 			pstmt = conn.prepareStatement(sql);
 			pstmt.setInt(1, day);
@@ -358,41 +264,11 @@ public class Holiday_Dao {
 		}catch(Exception e) {
 			System.out.println(e.getMessage());
 		}finally {
-			SingletonHelper.close(pstmt);
+			ConnHelper.close(pstmt);
 		}
 	}
-	
-	//10. 차감반영된 휴가목록 확인하기 
-	public int selectminusday(int empno) { 
-
-		Connection conn =null;
-		PreparedStatement pstmt =null;
-		ResultSet rs =null;
-		int restday =0;
-		
-		try {
-			conn = SingletonHelper.getConnection("oracle");
-			String sql = "select restday"
-					+ " from rest_holiday"
-					+ " where empno = ?";
-			
-			pstmt = conn.prepareStatement(sql);	
-			pstmt.setInt(1, empno);
-			rs = pstmt.executeQuery();
-			if(rs.next()) {
-				restday = rs.getInt(1);
-				
-			}
-		}catch(Exception e) {
-			System.out.println(e.getMessage());
-		}finally {
-			SingletonHelper.close(rs);
-			SingletonHelper.close(pstmt);
-		}		
-		return restday; 
-	}
-	
-	// 11. 반려리스트 조회
+ 
+	// 4. 반려리스트 조회
 	public List<HolidayList> RejectList() {
 		
 		List<HolidayList> rejectlist  = new ArrayList<>();
@@ -401,7 +277,7 @@ public class Holiday_Dao {
 		ResultSet rs =null;
 	
 		try {
-			conn = SingletonHelper.getConnection("oracle");
+			conn = ConnHelper.getConnection();
 			String sql= "select b.applyno "
 					+ ",a.empno"
 					+ ",a.ename"
@@ -441,13 +317,13 @@ public class Holiday_Dao {
 			e.printStackTrace();
 			System.out.println(e.getMessage());
 		}finally {
-			SingletonHelper.close(pstmt);
-			SingletonHelper.close(rs);
+			ConnHelper.close(pstmt);
+			ConnHelper.close(rs);
 		}
 		 return rejectlist;
 	}
 	
-	//12. 휴가신청번호 받아와서 반려내역 삭제 
+	//4.  반려내역 삭제 
 	public int holidayDelete(int applyno) {
 		
 		Connection conn = null;
@@ -455,7 +331,7 @@ public class Holiday_Dao {
 		int rowcnt =0;
 		
 		try {
-			conn = SingletonHelper.getConnection("oracle");
+			conn = ConnHelper.getConnection();
 			String sql = "delete from eapply "
 					+ "where applyno =? and stateno = 2";
 			
@@ -466,7 +342,7 @@ public class Holiday_Dao {
 		catch(Exception e) {
 			System.out.println(e.getMessage());
 		}finally {
-			SingletonHelper.close(pstmt);
+			ConnHelper.close(pstmt);
 		}		
 		return rowcnt;
 	}
